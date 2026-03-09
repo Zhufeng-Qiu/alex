@@ -49,13 +49,56 @@ async def run_orchestrator(job_id: str) -> None:
             logger.error(f"Planner: Job {job_id} not found.")
             return
         user_id = job.get("clerk_user_id")
+        job_type = job.get("job_type")
 
         logger.info(json.dumps({
             "event": "PLANNER_STARTED",
             "job_id": job_id,
             "user_id": user_id,
+            "job_type": job_type,
             "timestamp": start_time.isoformat(),
         }))
+
+        # If this is a 'brief' job, dispatch to the Briefer Lambda and return early.
+        if job_type == "brief":
+            try:
+                import boto3
+
+                lambda_region = os.getenv("DEFAULT_AWS_REGION") or os.getenv("AWS_REGION") or "us-east-1"
+                lambda_client = boto3.client("lambda", region_name=lambda_region)
+
+                request_payload = job.get("request_payload") or {}
+                mode = request_payload.get("mode", "market_overview")
+                interests = request_payload.get("interests")
+
+                payload = {
+                    "mode": mode,
+                    "interests": interests,
+                    "job_id": job_id,
+                }
+
+                # Fire-and-forget invocation; Briefer Lambda will update the job's report_payload.
+                lambda_client.invoke(
+                    FunctionName="alex-briefer",
+                    InvocationType="Event",
+                    Payload=json.dumps(payload).encode("utf-8"),
+                )
+
+                logger.info(json.dumps({
+                    "event": "BRIEFER_DISPATCHED",
+                    "job_id": job_id,
+                    "user_id": user_id,
+                    "mode": mode,
+                    "has_interests": bool(interests),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }))
+
+                # For brief jobs, we don't run the full orchestrator pipeline.
+                return
+            except Exception as e:
+                logger.error(f"Planner: Failed to dispatch brief job {job_id} to Briefer: {e}", exc_info=True)
+                db.jobs.update_status(job_id, "failed", error_message=str(e))
+                raise
 
         # Update job status to running
         db.jobs.update_status(job_id, 'running')

@@ -73,3 +73,9 @@ variable "openai_api_key" {
   default     = ""
   sensitive   = true
 }
+
+variable "alphavantage_api_key" {
+  description = "Alpha Vantage API key for Briefer market data"
+  type        = string
+  sensitive   = true
+}

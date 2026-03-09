@@ -19,6 +19,7 @@ COLORS = {
     'REPORTER': '\033[92m',   # Green
     'CHARTER': '\033[96m',    # Cyan
     'RETIREMENT': '\033[95m', # Magenta
+    'BRIEFER': '\033[90m',    # Grey
     'ERROR': '\033[91m',      # Red
     'LANGFUSE': '\033[35m',   # Purple (for LangFuse-related logs)
     'RESET': '\033[0m',       # Reset to default
@@ -32,6 +33,7 @@ LOG_GROUPS = {
     'REPORTER': '/aws/lambda/alex-reporter',
     'CHARTER': '/aws/lambda/alex-charter',
     'RETIREMENT': '/aws/lambda/alex-retirement',
+    'BRIEFER': '/aws/lambda/alex-briefer',
 }
 
 

@@ -182,7 +182,8 @@ resource "aws_iam_role_policy" "api_lambda_invoke" {
           "arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:alex-tagger",
           "arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:alex-reporter",
           "arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:alex-charter",
-          "arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:alex-retirement"
+          "arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:alex-retirement",
+          "arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:alex-briefer"
         ]
       }
     ]
@@ -198,7 +199,7 @@ resource "aws_lambda_function" "api" {
   source_code_hash = filebase64sha256("${path.module}/../../backend/api/api_lambda.zip")
   runtime          = "python3.12"
   architectures    = ["x86_64"]
-  timeout          = 30
+  timeout          = 120  # Briefer cold start can exceed 30s; allow time for first request
   memory_size      = 512
   tags             = local.common_tags
 

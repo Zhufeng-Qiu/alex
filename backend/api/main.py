@@ -7,7 +7,7 @@ import os
 import sys
 import json
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 from decimal import Decimal
 import uuid
@@ -161,6 +161,20 @@ class AnalyzeRequest(BaseModel):
 class AnalyzeResponse(BaseModel):
     job_id: str
     message: str
+
+
+class BriefRequest(BaseModel):
+    """Request to generate a brief report via alex-briefer."""
+
+    mode: Literal["market_overview", "user_focus"] = "market_overview"
+    interests: Optional[str] = Field(
+        default=None,
+        description="Free-text interests (companies, sectors, themes) when mode=user_focus",
+    )
+    job_id: Optional[str] = Field(
+        default=None,
+        description="Optional job_id to tie brief to an existing analysis job",
+    )
 
 # API Routes
 
@@ -566,6 +580,60 @@ async def trigger_analysis(request: AnalyzeRequest, clerk_user_id: str = Depends
     except Exception as e:
         logger.error(f"Error triggering analysis: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/brief")
+async def generate_brief(request: BriefRequest, clerk_user_id: str = Depends(get_current_user_id)):
+    """
+    Generate a brief report via alex-briefer.
+
+    - mode: "market_overview" or "user_focus"
+    - interests: optional free-text for user_focus mode
+    - job_id: optional existing job to associate as the parent of this brief. The API
+      will always create a new 'brief' job so each brief is stored separately and will
+      enqueue it for asynchronous processing via SQS.
+    """
+    try:
+        # Always create a new 'brief' job so each brief is stored separately.
+        parent_job_id = request.job_id
+        job_id = db.jobs.create_job(
+            clerk_user_id=clerk_user_id,
+            job_type="brief",
+            request_payload={
+                "source": "brief",
+                "mode": request.mode,
+                "interests": request.interests,
+                "has_interests": bool(request.interests),
+                "parent_job_id": parent_job_id,
+            },
+        )
+
+        # Enqueue the brief job for asynchronous processing via the shared SQS queue.
+        if SQS_QUEUE_URL:
+            message = {
+                "job_id": str(job_id),
+                "clerk_user_id": clerk_user_id,
+                "type": "brief",
+                "mode": request.mode,
+                "interests": request.interests,
+                "parent_job_id": parent_job_id,
+            }
+            sqs_client.send_message(
+                QueueUrl=SQS_QUEUE_URL,
+                MessageBody=json.dumps(message),
+            )
+            logger.info(f"Sent brief job to SQS: {job_id}")
+        else:
+            logger.warning("SQS_QUEUE_URL not configured, brief job created but not queued")
+
+        return {
+            "job_id": str(job_id),
+            "message": "Brief started. Check brief history for the result.",
+        }
+
+    except Exception as e:
+        logger.error(f"Error generating brief: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to generate brief report")
 
 @app.get("/api/jobs/{job_id}")
 async def get_job_status(job_id: str, clerk_user_id: str = Depends(get_current_user_id)):

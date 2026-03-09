@@ -153,6 +153,7 @@ def main():
         ('reporter', backend_dir / 'reporter' / 'reporter_lambda.zip'),
         ('charter', backend_dir / 'charter' / 'charter_lambda.zip'),
         ('retirement', backend_dir / 'retirement' / 'retirement_lambda.zip'),
+        ('briefer', backend_dir / 'briefer' / 'briefer_lambda.zip'),
     ]
     
     # Check if packages exist and optionally package them

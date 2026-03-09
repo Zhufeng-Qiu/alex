@@ -78,6 +78,16 @@ export default function Layout({ children }: LayoutProps) {
                   >
                     Analysis
                   </Link>
+                  <Link
+                    href="/brief"
+                    className={`text-sm font-medium transition-colors ${
+                      isActive("/brief")
+                        ? "text-primary"
+                        : "text-gray-600 hover:text-primary"
+                    }`}
+                  >
+                    Brief Report
+                  </Link>
                 </div>
               </div>
 
@@ -132,6 +142,16 @@ export default function Layout({ children }: LayoutProps) {
               >
                 Analysis
               </Link>
+              <Link
+                href="/brief"
+                className={`text-sm font-medium transition-colors ${
+                  isActive("/brief")
+                    ? "text-primary"
+                    : "text-gray-600 hover:text-primary"
+                }`}
+              >
+                Brief Report
+              </Link>
             </div>
           </div>
         </nav>
@@ -151,7 +171,7 @@ export default function Layout({ children }: LayoutProps) {
                 Important Disclaimer
               </p>
               <p className="text-xs text-gray-600">
-                This AI-generated advice has not been vetted by a qualified financial advisor and should not be used for trading decisions.
+                This AI-generated advice has not been vetted by a qualified financial advisor and should not be used for trading or tax decisions.
                 For informational purposes only. Always consult with a licensed financial professional before making investment decisions.
               </p>
             </div>

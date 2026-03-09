@@ -1,0 +1,89 @@
+"""
+Observability module for LangFuse integration for Briefer.
+Copies the reporter observability pattern.
+"""
+
+import os
+import logging
+from contextlib import contextmanager
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+
+@contextmanager
+def observe():
+    """Context manager for observability with LangFuse."""
+    logger.info("🔍 Observability (Briefer): Checking configuration...")
+
+    has_langfuse = bool(os.getenv("LANGFUSE_SECRET_KEY"))
+    has_openai = bool(os.getenv("OPENAI_API_KEY"))
+
+    logger.info(f"🔍 Observability: LANGFUSE_SECRET_KEY exists: {has_langfuse}")
+    logger.info(f"🔍 Observability: OPENAI_API_KEY exists: {has_openai}")
+
+    if not has_langfuse:
+        logger.info("🔍 Observability: LangFuse not configured, skipping setup")
+        yield None
+        return
+
+    if not has_openai:
+        logger.warning("⚠️  Observability: OPENAI_API_KEY not set, traces may not export")
+
+    langfuse_client = None
+
+    try:
+        logger.info("🔍 Observability: Setting up LangFuse for Briefer...")
+
+        import logfire
+        from langfuse import get_client
+
+        logfire.configure(
+            service_name="alex_briefer_agent",
+            send_to_logfire=False,
+        )
+        logger.info("✅ Observability: Logfire configured")
+
+        logfire.instrument_openai_agents()
+        logger.info("✅ Observability: OpenAI Agents SDK instrumented")
+
+        langfuse_client = get_client()
+        logger.info("✅ Observability: LangFuse client initialized")
+
+        try:
+            auth_result = langfuse_client.auth_check()
+            logger.info(
+                f"✅ Observability: LangFuse authentication check passed (result: {auth_result})"
+            )
+        except Exception as auth_error:
+            logger.warning(f"⚠️  Observability: Auth check failed but continuing: {auth_error}")
+
+        logger.info("🎯 Observability: Setup complete - traces will be sent to LangFuse")
+
+    except ImportError as e:
+        logger.error(f"❌ Observability: Missing required package: {e}")
+        langfuse_client = None
+    except Exception as e:
+        logger.error(f"❌ Observability: Setup failed: {e}")
+        langfuse_client = None
+
+    try:
+        yield langfuse_client
+    finally:
+        if langfuse_client:
+            try:
+                logger.info("🔍 Observability: Flushing traces to LangFuse...")
+                langfuse_client.flush()
+                langfuse_client.shutdown()
+
+                import time
+
+                logger.info("🔍 Observability: Waiting 10 seconds for flush to complete...")
+                time.sleep(10)
+
+                logger.info("✅ Observability: Traces flushed successfully")
+            except Exception as e:
+                logger.error(f"❌ Observability: Failed to flush traces: {e}")
+        else:
+            logger.debug("🔍 Observability: No client to flush")
+
