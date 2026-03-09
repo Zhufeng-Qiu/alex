@@ -186,7 +186,11 @@ resource "aws_iam_role_policy" "lambda_agents_policy" {
           "bedrock:InvokeModel",
           "bedrock:InvokeModelWithResponseStream"
         ]
-        Resource = local.bedrock_policy_resources
+        # Replaced ${var.bedrock_region} with * for Bedrock region workaround
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/*",
+          "arn:aws:bedrock:*:*:inference-profile/*"
+        ]
       }
     ]
   })
