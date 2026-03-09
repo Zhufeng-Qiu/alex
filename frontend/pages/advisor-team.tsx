@@ -168,7 +168,11 @@ export default function AdvisorTeam() {
 
       if (response.ok) {
         const data = await response.json();
-        setJobs(data.jobs || []);
+        const allJobs = data.jobs || [];
+        const analysisJobs = allJobs.filter(
+          (j: Job) => j.job_type !== 'brief'
+        );
+        setJobs(analysisJobs);
       }
     } catch (error) {
       console.error('Error fetching jobs:', error);
