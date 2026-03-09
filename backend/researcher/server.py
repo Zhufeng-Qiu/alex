@@ -43,7 +43,7 @@ async def run_research_agent(topic: str = None) -> str:
 
     # Please override these variables with the region you are using
     # Other choices: us-west-2 (for OpenAI OSS models) and eu-central-1
-    REGION = "us-east-1"
+    REGION = "us-west-2"
     os.environ["AWS_REGION_NAME"] = REGION  # LiteLLM's preferred variable
     os.environ["AWS_REGION"] = REGION  # Boto3 standard
     os.environ["AWS_DEFAULT_REGION"] = REGION  # Fallback
@@ -54,12 +54,20 @@ async def run_research_agent(topic: str = None) -> str:
     # bedrock/openai.gpt-oss-120b-1:0 for OpenAI OSS models
     # bedrock/converse/us.anthropic.claude-sonnet-4-20250514-v1:0 for Claude Sonnet 4
     # NOTE that nova-pro is needed to support tools and MCP servers; nova-lite is not enough - thank you Yuelin L.!
-    MODEL = "bedrock/us.amazon.nova-pro-v1:0"
+    MODEL = "bedrock/openai.gpt-oss-120b-1:0"
     model = LitellmModel(model=MODEL)
 
     # Create and run the agent with MCP server
     with trace("Researcher"):
         async with create_playwright_mcp_server(timeout_seconds=60) as playwright_mcp:
+            # Debug: Log available tools from MCP server
+            try:
+                # The MCP server tools should be automatically discovered by the agent
+                print("DEBUG: Creating agent with Playwright MCP server...")
+            except Exception as e:
+                print(f"DEBUG: Error creating agent: {e}")
+                raise
+            
             agent = Agent(
                 name="Alex Investment Researcher",
                 instructions=get_agent_instructions(),

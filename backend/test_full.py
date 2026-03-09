@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """Full end-to-end test via SQS for the Alex platform"""
 
+import sys
+from pathlib import Path
+
+_backend = Path(__file__).resolve().parent
+_db = _backend / "database"
+if _db.exists() and str(_db) not in sys.path:
+    sys.path.insert(0, str(_db))
+
 import os
 import json
 import boto3

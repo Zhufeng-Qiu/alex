@@ -26,6 +26,85 @@ locals {
     Part      = "8_enterprise"
     ManagedBy = "terraform"
   }
+
+  # One set of Bedrock widgets per region (align with 6_agents bedrock_regions; AWS may route inference across US regions)
+  bedrock_invocation_widgets = [
+    for r in var.bedrock_regions : {
+      type   = "metric"
+      width  = 12
+      height = 6
+      properties = {
+        metrics = [
+          ["AWS/Bedrock", "Invocations", "ModelId", var.bedrock_model_id, { stat = "Sum", label = "Model Invocations", id = "m1", color = "#1f77b4" }],
+          [".", "InvocationClientErrors", ".", ".", { stat = "Sum", label = "Client Errors", id = "m2", color = "#d62728" }],
+          [".", "InvocationServerErrors", ".", ".", { stat = "Sum", label = "Server Errors", id = "m3", color = "#ff7f0e" }]
+        ]
+        view    = "timeSeries"
+        stacked = false
+        region  = r
+        title   = "Bedrock Model Invocations (${var.bedrock_model_id}) — ${r}"
+        period  = 300
+        stat    = "Sum"
+        yAxis = {
+          left = {
+            label     = "Count"
+            showUnits = false
+          }
+        }
+      }
+    }
+  ]
+  bedrock_token_widgets = [
+    for r in var.bedrock_regions : {
+      type   = "metric"
+      width  = 12
+      height = 6
+      properties = {
+        metrics = [
+          ["AWS/Bedrock", "InputTokenCount", "ModelId", var.bedrock_model_id, { stat = "Sum", label = "Input Tokens", id = "t1", color = "#2ca02c" }],
+          [".", "OutputTokenCount", ".", ".", { stat = "Sum", label = "Output Tokens", id = "t2", color = "#9467bd" }]
+        ]
+        view    = "timeSeries"
+        stacked = true
+        region  = r
+        title   = "Bedrock Token Usage (${var.bedrock_model_id}) — ${r}"
+        period  = 300
+        stat    = "Sum"
+        yAxis = {
+          left = {
+            label     = "Tokens"
+            showUnits = false
+          }
+        }
+      }
+    }
+  ]
+  bedrock_latency_widgets = [
+    for r in var.bedrock_regions : {
+      type   = "metric"
+      width  = 12
+      height = 6
+      properties = {
+        metrics = [
+          ["AWS/Bedrock", "InvocationLatency", "ModelId", var.bedrock_model_id, { stat = "Average", label = "Average Latency", id = "l1", color = "#1f77b4" }],
+          [".", ".", ".", ".", { stat = "Maximum", label = "Max Latency", id = "l2", color = "#d62728" }],
+          [".", ".", ".", ".", { stat = "Minimum", label = "Min Latency", id = "l3", color = "#2ca02c" }]
+        ]
+        view    = "timeSeries"
+        stacked = false
+        region  = r
+        title   = "Bedrock Response Latency (${var.bedrock_model_id}) — ${r}"
+        period  = 300
+        yAxis = {
+          left = {
+            label     = "Latency (ms)"
+            showUnits = false
+          }
+        }
+      }
+    }
+  ]
+  bedrock_widgets = concat(local.bedrock_invocation_widgets, local.bedrock_token_widgets, local.bedrock_latency_widgets)
 }
 
 # ========================================
@@ -36,80 +115,9 @@ resource "aws_cloudwatch_dashboard" "ai_model_usage" {
   dashboard_name = "${local.name_prefix}-ai-model-usage"
 
   dashboard_body = jsonencode({
-    widgets = [
-      # Bedrock Model Invocations
-      {
-        type   = "metric"
-        width  = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/Bedrock", "Invocations", "ModelId", var.bedrock_model_id, { stat = "Sum", label = "Model Invocations", id = "m1", color = "#1f77b4" }],
-            [".", "InvocationClientErrors", ".", ".", { stat = "Sum", label = "Client Errors", id = "m2", color = "#d62728" }],
-            [".", "InvocationServerErrors", ".", ".", { stat = "Sum", label = "Server Errors", id = "m3", color = "#ff7f0e" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.bedrock_region
-          title   = "Bedrock Model Invocations (${var.bedrock_model_id})"
-          period  = 300
-          stat    = "Sum"
-          yAxis = {
-            left = {
-              label     = "Count"
-              showUnits = false
-            }
-          }
-        }
-      },
-      # Bedrock Token Usage
-      {
-        type   = "metric"
-        width  = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/Bedrock", "InputTokenCount", "ModelId", var.bedrock_model_id, { stat = "Sum", label = "Input Tokens", id = "t1", color = "#2ca02c" }],
-            [".", "OutputTokenCount", ".", ".", { stat = "Sum", label = "Output Tokens", id = "t2", color = "#9467bd" }]
-          ]
-          view    = "timeSeries"
-          stacked = true
-          region  = var.bedrock_region
-          title   = "Bedrock Token Usage (${var.bedrock_model_id})"
-          period  = 300
-          stat    = "Sum"
-          yAxis = {
-            left = {
-              label     = "Tokens"
-              showUnits = false
-            }
-          }
-        }
-      },
-      # Bedrock Latency
-      {
-        type   = "metric"
-        width  = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/Bedrock", "InvocationLatency", "ModelId", var.bedrock_model_id, { stat = "Average", label = "Average Latency", id = "l1", color = "#1f77b4" }],
-            [".", ".", ".", ".", { stat = "Maximum", label = "Max Latency", id = "l2", color = "#d62728" }],
-            [".", ".", ".", ".", { stat = "Minimum", label = "Min Latency", id = "l3", color = "#2ca02c" }]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.bedrock_region
-          title   = "Bedrock Response Latency (${var.bedrock_model_id})"
-          period  = 300
-          yAxis = {
-            left = {
-              label     = "Latency (ms)"
-              showUnits = false
-            }
-          }
-        }
-      },
+    widgets = concat(
+      local.bedrock_widgets,
+      [
       # SageMaker Endpoint Invocations
       {
         type   = "metric"
@@ -158,7 +166,8 @@ resource "aws_cloudwatch_dashboard" "ai_model_usage" {
           }
         }
       }
-    ]
+      ]
+    )
   })
 
 }

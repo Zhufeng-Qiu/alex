@@ -73,6 +73,9 @@ def package_lambda():
         shutil.copy(charter_dir / "agent.py", package_dir)
         shutil.copy(charter_dir / "templates.py", package_dir)
         shutil.copy(charter_dir / "observability.py", package_dir)
+        # Shared backend modules (guardrails, audit) so Lambda can import them
+        shutil.copy(backend_dir / "guardrails.py", package_dir)
+        shutil.copy(backend_dir / "audit.py", package_dir)
         
         # Create the zip file
         zip_path = charter_dir / "charter_lambda.zip"

@@ -55,6 +55,9 @@ def main():
         # Copy lambda_handler.py to root level for Lambda to find it
         shutil.copy2(api_dir / "lambda_handler.py", package_dir / "lambda_handler.py")
 
+        # Copy shared backend modules so Lambda can import them
+        shutil.copy2(backend_dir / "guardrails.py", package_dir / "guardrails.py")
+
         # Copy database package
         database_src = backend_dir / "database" / "src"
         database_dst = package_dir / "src"

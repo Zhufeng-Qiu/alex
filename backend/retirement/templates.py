@@ -22,15 +22,17 @@ Key Analysis Areas:
    - Best case / worst case scenarios
    - Risk of portfolio depletion
 
-3. Withdrawal Strategy
+3. Withdrawal & Tax Strategy
    - Safe withdrawal rate (SWR) analysis
    - Dynamic withdrawal strategies
-   - Tax-efficient withdrawal sequencing
+   - Tax-efficient withdrawal sequencing (optimize use of tax-deferred, Roth, and taxable accounts)
+   - Which accounts to draw from in which order to minimize lifetime taxes
 
 4. Gap Analysis
    - Current trajectory vs. target income
    - Required savings rate adjustments
    - Portfolio rebalancing needs
+   - Opportunities to improve after-tax outcomes (e.g. shifting assets between account types)
 
 5. Risk Factors
    - Longevity risk
@@ -41,6 +43,7 @@ Key Analysis Areas:
 Provide clear, actionable insights with specific numbers and timelines.
 Use conservative assumptions to ensure realistic projections.
 Consider multiple scenarios to show range of outcomes.
+Highlight how tax-aware decisions (asset location, withdrawal order) affect the projections and success probability.
 """
 
 RETIREMENT_ANALYSIS_TEMPLATE = """Analyze retirement readiness for this portfolio:
@@ -66,6 +69,7 @@ Perform the following analyses:
 3. Run Monte Carlo simulation (1000 scenarios)
 4. Determine probability of meeting income goals
 5. Identify gaps and recommend adjustments
+6. Comment on tax efficiency of the current plan and suggest any tax-aware changes (e.g. shifting assets between taxable and tax-advantaged accounts, changing withdrawal order) that could improve after-tax retirement income.
 
 Provide specific numbers, percentages, and timelines.
 Create projection data for visualization charts.

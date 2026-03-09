@@ -6,6 +6,8 @@ import os
 import json
 import asyncio
 import logging
+import sys
+import time
 from typing import Dict, Any
 from datetime import datetime
 
@@ -30,6 +32,15 @@ from src import Database
 from templates import RETIREMENT_INSTRUCTIONS
 from agent import create_agent
 from observability import observe
+
+# Section 4 guardrails: response size limit
+import sys
+import os as _os
+_backend = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+if _backend not in sys.path:
+    sys.path.insert(0, _backend)
+from guardrails import truncate_response
+from audit import AuditLogger
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -102,9 +113,9 @@ async def run_retirement_agent(job_id: str, portfolio_data: Dict[str, Any]) -> D
                 raise AgentTemporaryError(f"Temporary error: {e}")
             raise  # Re-raise non-retryable errors
         
-        # Save the analysis to database
+        # Save the analysis to database (truncate to prevent runaway size - Section 4)
         retirement_payload = {
-            'analysis': result.final_output,
+            'analysis': truncate_response(result.final_output or ""),
             'generated_at': datetime.utcnow().isoformat(),
             'agent': 'retirement'
         }
@@ -212,8 +223,18 @@ def lambda_handler(event, context):
 
             logger.info(f"Retirement: Processing job {job_id}")
 
-            # Run the agent
+            # Run the agent (Section 5: audit trail)
+            start_time = time.perf_counter()
             result = asyncio.run(run_retirement_agent(job_id, portfolio_data))
+            duration_ms = int((time.perf_counter() - start_time) * 1000)
+            AuditLogger.log_ai_decision(
+                agent_name="retirement",
+                job_id=job_id,
+                input_data={"job_id": job_id, "num_accounts": len(portfolio_data.get("accounts", []))},
+                output_data=result,
+                model_used=os.getenv("BEDROCK_MODEL_ID", ""),
+                duration_ms=duration_ms,
+            )
 
             logger.info(f"Retirement completed for job {job_id}")
 

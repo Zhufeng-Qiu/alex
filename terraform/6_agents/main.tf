@@ -19,6 +19,22 @@ provider "aws" {
 # Data source for current caller identity
 data "aws_caller_identity" "current" {}
 
+# US regions only (all services are in US; covers Nova inference profile routing)
+locals {
+  bedrock_regions = [
+    "us-east-1",
+    "us-east-2",
+    "us-west-1",
+    "us-west-2",
+  ]
+  bedrock_policy_resources = flatten([
+    for r in local.bedrock_regions : [
+      "arn:aws:bedrock:${r}::foundation-model/*",
+      "arn:aws:bedrock:${r}:*:inference-profile/*"
+    ]
+  ])
+}
+
 # ========================================
 # SQS Queue for Async Job Processing
 # ========================================
@@ -162,17 +178,14 @@ resource "aws_iam_role_policy" "lambda_agents_policy" {
         ]
         Resource = "arn:aws:sagemaker:${var.aws_region}:${data.aws_caller_identity.current.account_id}:endpoint/${var.sagemaker_endpoint}"
       },
-      # Bedrock access for all agents
+      # Bedrock access for all agents (all potential Bedrock regions)
       {
         Effect = "Allow"
         Action = [
           "bedrock:InvokeModel",
           "bedrock:InvokeModelWithResponseStream"
         ]
-        Resource = [
-          "arn:aws:bedrock:${var.bedrock_region}::foundation-model/*",
-          "arn:aws:bedrock:${var.bedrock_region}:*:inference-profile/*"
-        ]
+        Resource = local.bedrock_policy_resources
       }
     ]
   })

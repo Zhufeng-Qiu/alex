@@ -25,3 +25,9 @@ variable "scheduler_enabled" {
   type        = bool
   default     = false
 }
+
+variable "scheduler_schedule" {
+  description = "Schedule expression for EventBridge Scheduler. Examples: 'rate(2 hours)', 'rate(1 day)', 'cron(0 9 * * ? *)' (daily at 9 AM UTC), 'cron(0 9 ? * MON *)' (weekly on Monday at 9 AM UTC)"
+  type        = string
+  default     = "rate(2 hours)"
+}

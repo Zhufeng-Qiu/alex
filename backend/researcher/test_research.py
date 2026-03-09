@@ -81,7 +81,7 @@ def test_research(topic=None):
     try:
         research_url = f"https://{service_url}/research"
         # Only include topic in payload if it's provided
-        payload = {"topic": display_topic} if display_topic else {}
+        payload = {"topic": topic} if topic else {}
         response = requests.post(
             research_url,
             json=payload,

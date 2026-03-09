@@ -3,6 +3,14 @@
 Full test for Charter agent via Lambda
 """
 
+import sys
+from pathlib import Path
+
+_backend = Path(__file__).resolve().parent.parent
+_db = _backend / "database"
+if _db.exists() and str(_db) not in sys.path:
+    sys.path.insert(0, str(_db))
+
 import json
 import boto3
 import time

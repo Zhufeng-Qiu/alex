@@ -25,7 +25,9 @@ Examples:
 - VTI (Total Market): 100% equity, 100% north_america, diverse sector allocation
 - VXUS (International): 100% equity, distributed across regions, diverse sectors
 
-You must return your response as a structured InstrumentClassification object with all fields properly populated."""
+Explainability: First provide a short rationale explaining why you chose these allocations (asset class, region, sector), then provide the classification.
+
+You must return your response as a structured InstrumentClassification object with all fields properly populated (including the rationale field)."""
 
 CLASSIFICATION_PROMPT = """Classify the following financial instrument:
 

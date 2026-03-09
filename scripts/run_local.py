@@ -91,21 +91,40 @@ def check_env_files():
 
     print("✅ Environment files found")
 
+def _env_for_subprocess():
+    """Return env with VIRTUAL_ENV/PYTHONHOME unset so uv uses the target project's venv."""
+    env = os.environ.copy()
+    env.pop("VIRTUAL_ENV", None)
+    env.pop("PYTHONHOME", None)
+    return env
+
+
 def start_backend():
-    """Start the FastAPI backend"""
-    backend_dir = Path(__file__).parent.parent / "backend" / "api"
+    """Start the FastAPI backend from workspace root so alex-database resolves."""
+    backend_root = Path(__file__).parent.parent / "backend"
+    api_dir = backend_root / "api"
 
     print("\n🚀 Starting FastAPI backend...")
 
-    # Check if dependencies are installed
-    if not (backend_dir / ".venv").exists() and not (backend_dir / "uv.lock").exists():
+    # Run from workspace root so uv resolves alex-database (workspace member)
+    if not (backend_root / ".venv").exists() and not (backend_root / "uv.lock").exists():
         print("  Installing backend dependencies...")
-        subprocess.run(["uv", "sync"], cwd=backend_dir, check=True)
+        subprocess.run(
+            ["uv", "sync"],
+            cwd=backend_root,
+            check=True,
+            env=_env_for_subprocess(),
+        )
 
-    # Start the backend
+    # Start the backend: run api package from workspace root (use --package not -p; -p is --python)
+    # Add backend/database to PYTHONPATH so "from src import Database" resolves (api/main.py)
+    backend_env = _env_for_subprocess()
+    db_path = str(backend_root / "database")
+    backend_env["PYTHONPATH"] = db_path if not backend_env.get("PYTHONPATH") else f"{db_path}{os.pathsep}{backend_env['PYTHONPATH']}"
     proc = subprocess.Popen(
-        ["uv", "run", "main.py"],
-        cwd=backend_dir,
+        ["uv", "run", "--package", "api", "api/main.py"],
+        cwd=backend_root,
+        env=backend_env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -118,16 +137,40 @@ def start_backend():
     for _ in range(30):  # 30 second timeout
         try:
             import httpx
-            response = httpx.get("http://localhost:8000/health")
+            response = httpx.get("http://localhost:8000/health", timeout=2)
             if response.status_code == 200:
                 print("  ✅ Backend running at http://localhost:8000")
                 print("     API docs: http://localhost:8000/docs")
                 return proc
-        except:
+        except Exception:
             time.sleep(1)
 
+    # Backend failed to start: show stderr/stdout so user can see the error
     print("  ❌ Backend failed to start")
+    _dump_subprocess_output(proc, "Backend")
     cleanup()
+
+
+def _dump_subprocess_output(proc, label: str):
+    """If process has ended, read and print stdout/stderr."""
+    if proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+    for pipe, name in [(proc.stdout, "stdout"), (proc.stderr, "stderr")]:
+        if pipe is None:
+            continue
+        try:
+            data = pipe.read()
+            if data:
+                print(f"\n  --- {label} {name} ---")
+                for line in data.splitlines():
+                    print(f"  {line}")
+                print(f"  --- end ---\n")
+        except Exception:
+            pass
 
 def start_frontend():
     """Start the NextJS frontend"""

@@ -38,7 +38,7 @@ LOG_GROUPS = {
 class AgentLogWatcher:
     """Watches CloudWatch logs for all agents."""
 
-    def __init__(self, region: str = 'us-east-1', lookback_minutes: int = 5):
+    def __init__(self, region: str = 'us-west-2', lookback_minutes: int = 5):
         """Initialize the log watcher."""
         self.logs_client = boto3.client('logs', region_name=region)
         self.lookback_minutes = lookback_minutes
@@ -179,8 +179,8 @@ def main():
     parser = argparse.ArgumentParser(description='Watch CloudWatch logs from all Alex agents')
     parser.add_argument(
         '--region',
-        default='us-east-1',
-        help='AWS region (default: us-east-1)'
+        default='us-west-2',
+        help='AWS region (default: us-west-2)'
     )
     parser.add_argument(
         '--lookback',

@@ -10,10 +10,18 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 from dataclasses import dataclass
 
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
 from agents import function_tool, RunContextWrapper
 from agents.extensions.models.litellm_model import LitellmModel
 
 logger = logging.getLogger()
+
+
+class AgentTemporaryError(Exception):
+    """Temporary error that should trigger retry (Section 4 guardrails)."""
+    pass
+
 
 # Initialize Lambda client
 lambda_client = boto3.client("lambda")
@@ -32,10 +40,16 @@ class PlannerContext:
     job_id: str
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((AgentTemporaryError, TimeoutError)),
+    before_sleep=lambda rs: logger.info(f"Planner: Agent invocation retry in {rs.next_action.sleep:.0f}s..."),
+)
 async def invoke_lambda_agent(
     agent_name: str, function_name: str, payload: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """Invoke a Lambda function for an agent."""
+    """Invoke a Lambda function for an agent (with retry for temporary failures - Section 4)."""
 
     # For local testing with mocked agents
     if MOCK_LAMBDAS:
@@ -63,10 +77,22 @@ async def invoke_lambda_agent(
             else:
                 result = result["body"]
 
+        # Check for retryable errors in response
+        if isinstance(result, dict) and result.get("error_type") == "RATE_LIMIT":
+            raise AgentTemporaryError(f"Rate limit hit for {agent_name}")
+
         logger.info(f"{agent_name} completed successfully")
         return result
 
+    except AgentTemporaryError:
+        raise
+    except TimeoutError:
+        raise
     except Exception as e:
+        err_lower = str(e).lower()
+        if "throttled" in err_lower or "timeout" in err_lower:
+            logger.warning(f"Agent {agent_name} temporary error: {e}")
+            raise AgentTemporaryError(f"Temporary error: {e}") from e
         logger.error(f"Error invoking {agent_name}: {e}")
         return {"error": str(e)}
 

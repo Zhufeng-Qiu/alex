@@ -73,6 +73,9 @@ def package_lambda():
         shutil.copy(tagger_dir / "agent.py", package_dir)
         shutil.copy(tagger_dir / "templates.py", package_dir)
         shutil.copy(tagger_dir / "observability.py", package_dir)
+        # Shared backend modules (guardrails, audit) so Lambda can import them if needed
+        shutil.copy(backend_dir / "guardrails.py", package_dir)
+        shutil.copy(backend_dir / "audit.py", package_dir)
         
         # Create the zip file
         zip_path = tagger_dir / "tagger_lambda.zip"

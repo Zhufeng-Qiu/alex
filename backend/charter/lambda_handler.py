@@ -6,6 +6,8 @@ import os
 import json
 import asyncio
 import logging
+import sys
+import time
 from typing import Dict, Any
 
 from agents import Agent, Runner, trace
@@ -25,8 +27,48 @@ from templates import CHARTER_INSTRUCTIONS
 from agent import create_agent
 from observability import observe
 
+_backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _backend not in sys.path:
+    sys.path.insert(0, _backend)
+from audit import AuditLogger
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+
+def validate_chart_data(chart_json: str | dict) -> tuple[bool, str, dict]:
+    """
+    Validates that charter agent output is well-formed JSON with expected structure.
+    Returns (is_valid, error_message, parsed_data).
+    """
+    try:
+        data = json.loads(chart_json) if isinstance(chart_json, str) else chart_json
+        if not isinstance(data, dict):
+            return False, "Expected a JSON object", {}
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON from charter agent: {e}")
+        return False, f"Invalid JSON: {e}", {}
+
+    try:
+        required_keys = ["charts"]
+        if not all(key in data for key in required_keys):
+            return False, f"Missing required keys. Expected: {required_keys}", {}
+
+        if not isinstance(data["charts"], list):
+            return False, "Charts must be an array", {}
+
+        for i, chart in enumerate(data["charts"]):
+            if "type" not in chart:
+                return False, f"Chart {i} missing 'type' field", {}
+            if "data" not in chart:
+                return False, f"Chart {i} missing 'data' field", {}
+            if not isinstance(chart["data"], list):
+                return False, f"Chart {i} data must be an array", {}
+
+        return True, "", data
+    except Exception as e:
+        logger.error(f"Unexpected error validating chart data: {e}")
+        return False, f"Validation error: {e}", {}
 
 @retry(
     retry=retry_if_exception_type(RateLimitError),
@@ -85,6 +127,12 @@ async def run_charter_agent(job_id: str, portfolio_data: Dict[str, Any], db=None
                 
                 try:
                     parsed_data = json.loads(json_str)
+                    is_valid, error_msg, validated_data = validate_chart_data(parsed_data)
+                    if not is_valid:
+                        logger.error(f"Charter: Invalid chart output for job {job_id}: {error_msg}")
+                        parsed_data = {}
+                    else:
+                        parsed_data = validated_data
                     charts = parsed_data.get('charts', [])
                     logger.info(f"Charter: Successfully parsed JSON, found {len(charts)} charts")
                     
@@ -208,8 +256,18 @@ def lambda_handler(event, context):
 
             logger.info(f"Charter: Processing job {job_id}")
 
-            # Run the agent
+            # Run the agent (Section 5: audit trail)
+            start_time = time.perf_counter()
             result = asyncio.run(run_charter_agent(job_id, portfolio_data, db))
+            duration_ms = int((time.perf_counter() - start_time) * 1000)
+            AuditLogger.log_ai_decision(
+                agent_name="charter",
+                job_id=job_id,
+                input_data={"job_id": job_id, "num_accounts": len(portfolio_data.get("accounts", []))},
+                output_data=result,
+                model_used=os.getenv("BEDROCK_MODEL_ID", ""),
+                duration_ms=duration_ms,
+            )
 
             logger.info(f"Charter completed for job {job_id}: {result}")
 

@@ -4,12 +4,19 @@ Handles all API routes with Clerk JWT authentication
 """
 
 import os
+import sys
 import json
 import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from decimal import Decimal
 import uuid
+
+# Allow importing backend guardrails (Section 4)
+_backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _backend not in sys.path:
+    sys.path.insert(0, _backend)
+from guardrails import sanitize_user_input
 
 from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,9 +39,23 @@ from src.schemas import (
 # Load environment variables
 load_dotenv(override=True)
 
-# Configure logging
+# Configure structured logging (8_enterprise guide)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+class StructuredLogger:
+    """Structured JSON logging for CloudWatch and observability."""
+
+    @staticmethod
+    def log_event(event_type: str, user_id: Optional[str] = None, details: Optional[Dict[str, Any]] = None) -> None:
+        log_entry = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "event_type": event_type,
+            "user_id": user_id,
+            "details": details or {},
+        }
+        logger.info(json.dumps(log_entry))
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -202,6 +223,8 @@ async def update_user(user_update: UserUpdate, clerk_user_id: str = Depends(get_
 
         # Update user - users table uses clerk_user_id as primary key
         update_data = user_update.model_dump(exclude_unset=True)
+        if "display_name" in update_data and update_data["display_name"] is not None:
+            update_data["display_name"] = sanitize_user_input(str(update_data["display_name"]))
 
         # Use the database client directly since users table has clerk_user_id as PK
         db.users.db.update(
@@ -242,11 +265,11 @@ async def create_account(account: AccountCreate, clerk_user_id: str = Depends(ge
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Create account
+        # Create account (sanitize free-text fields - Section 4 guardrails)
         account_id = db.accounts.create_account(
             clerk_user_id=clerk_user_id,
-            account_name=account.account_name,
-            account_purpose=account.account_purpose,
+            account_name=sanitize_user_input(account.account_name),
+            account_purpose=sanitize_user_input(account.account_purpose or ""),
             cash_balance=getattr(account, 'cash_balance', Decimal('0'))
         )
 
@@ -272,8 +295,12 @@ async def update_account(account_id: str, account_update: AccountUpdate, clerk_u
         if account.get('clerk_user_id') != clerk_user_id:
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        # Update account
+        # Update account (sanitize free-text fields - Section 4 guardrails)
         update_data = account_update.model_dump(exclude_unset=True)
+        if "account_name" in update_data and update_data["account_name"] is not None:
+            update_data["account_name"] = sanitize_user_input(str(update_data["account_name"]))
+        if "account_purpose" in update_data and update_data["account_purpose"] is not None:
+            update_data["account_purpose"] = sanitize_user_input(str(update_data["account_purpose"]))
         db.accounts.update(account_id, update_data)
 
         # Return updated account
@@ -492,7 +519,11 @@ async def list_instruments(clerk_user_id: str = Depends(get_current_user_id)):
 @app.post("/api/analyze", response_model=AnalyzeResponse)
 async def trigger_analysis(request: AnalyzeRequest, clerk_user_id: str = Depends(get_current_user_id)):
     """Trigger portfolio analysis"""
-
+    StructuredLogger.log_event(
+        "ANALYSIS_TRIGGERED",
+        user_id=clerk_user_id,
+        details={"accounts": clerk_user_id, "analysis_type": request.analysis_type, "options": request.options},
+    )
     try:
         # Get user
         user = db.users.find_by_clerk_id(clerk_user_id)

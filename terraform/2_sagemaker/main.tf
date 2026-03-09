@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.70"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.9"
+    }
   }
   
   # Using local backend - state will be stored in terraform.tfstate in this directory
@@ -42,13 +46,20 @@ resource "aws_iam_role_policy_attachment" "sagemaker_full_access" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
 }
 
+# Compute the correct ECR image URI based on region
+locals {
+  # Use provided image URI or generate one based on region
+  # HuggingFace PyTorch inference container for us-west-2
+  sagemaker_image_uri = var.sagemaker_image_uri != "" ? var.sagemaker_image_uri : "763104351884.dkr.ecr.${var.aws_region}.amazonaws.com/huggingface-pytorch-inference:1.13.1-transformers4.26.0-cpu-py39-ubuntu20.04"
+}
+
 # SageMaker Model
 resource "aws_sagemaker_model" "embedding_model" {
   name               = "alex-embedding-model"
   execution_role_arn = aws_iam_role.sagemaker_role.arn
 
   primary_container {
-    image = var.sagemaker_image_uri
+    image = local.sagemaker_image_uri
     environment = {
       HF_MODEL_ID = var.embedding_model_name
       HF_TASK     = "feature-extraction"

@@ -6,6 +6,7 @@ import os
 import json
 import asyncio
 import logging
+import time
 from typing import Dict, Any
 from datetime import datetime
 
@@ -29,6 +30,15 @@ from src import Database
 from templates import REPORTER_INSTRUCTIONS
 from agent import create_agent, ReporterContext
 from observability import observe
+
+# Section 4 guardrails: response size limit
+import sys
+import os as _os
+_backend = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+if _backend not in sys.path:
+    sys.path.insert(0, _backend)
+from guardrails import truncate_response
+from audit import AuditLogger
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -81,9 +91,9 @@ async def run_reporter_agent(
                     logger.error(f"Reporter score is too low: {score}")
                     response = "I'm sorry, I'm not able to generate a report for you. Please try again later."
 
-        # Save the report to database
+        # Save the report to database (truncate to prevent runaway size - Section 4)
         report_payload = {
-            "content": response,
+            "content": truncate_response(response),
             "generated_at": datetime.utcnow().isoformat(),
             "agent": "reporter",
         }
@@ -208,9 +218,19 @@ def lambda_handler(event, context):
                     logger.warning(f"Could not load user data: {e}. Using defaults.")
                     user_data = {"years_until_retirement": 30, "target_retirement_income": 80000}
 
-            # Run the agent
+            # Run the agent (Section 5: audit trail)
+            start_time = time.perf_counter()
             result = asyncio.run(
                 run_reporter_agent(job_id, portfolio_data, user_data, db, observability)
+            )
+            duration_ms = int((time.perf_counter() - start_time) * 1000)
+            AuditLogger.log_ai_decision(
+                agent_name="reporter",
+                job_id=job_id,
+                input_data={"job_id": job_id, "num_accounts": len(portfolio_data.get("accounts", []))},
+                output_data=result,
+                model_used=os.getenv("BEDROCK_MODEL_ID", ""),
+                duration_ms=duration_ms,
             )
 
             logger.info(f"Reporter completed for job {job_id}")
